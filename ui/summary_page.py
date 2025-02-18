@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QHeaderView
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QSpinBox
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 
@@ -6,6 +6,8 @@ class SummaryPage(QWidget):
     def __init__(self, budget_data):
         super().__init__()
         self.budget_data = budget_data
+        self.current_month = "January"  # Default month
+        self.current_year = 2025  # Default year
         self.init_ui()
 
         # Connect the data_changed signal to update the UI
@@ -15,6 +17,19 @@ class SummaryPage(QWidget):
     def init_ui(self):
         """Initialize the UI for the Summary Page."""
         self.layout = QVBoxLayout()
+
+        # Month selection dropdown
+        self.month_selector = QComboBox()
+        self.month_selector.addItems(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"])
+        self.month_selector.currentTextChanged.connect(self.change_month)
+        self.layout.addWidget(self.month_selector)
+
+        # Year selection spin box
+        self.year_selector = QSpinBox()
+        self.year_selector.setRange(2000, 2100)
+        self.year_selector.setValue(self.current_year)
+        self.year_selector.valueChanged.connect(self.change_year)
+        self.layout.addWidget(self.year_selector)
 
         # Title label
         title_label = QLabel("Summary")
@@ -49,14 +64,24 @@ class SummaryPage(QWidget):
         # Set the layout
         self.setLayout(self.layout)
 
+    def change_month(self, month):
+        """Change the current month and refresh the UI."""
+        self.current_month = month
+        self.refresh_ui()
+
+    def change_year(self, year):
+        """Change the current year and refresh the UI."""
+        self.current_year = year
+        self.refresh_ui()
+
     def update_summary_table(self):
         """Update the summary table with the latest data."""
-        categories = self.budget_data.get_data()
+        categories = self.budget_data.get_data(self.current_month, self.current_year)["categories"]
         self.summary_table.setRowCount(len(categories))
 
         # Populate the table with data
         for i, (category, data) in enumerate(categories.items()):
-            projected, actual = self.budget_data.get_category_total(category)
+            projected, actual = self.budget_data.get_category_total(self.current_month, self.current_year, category)
             difference = projected - actual
             super_category = data["super_category"]
 
@@ -71,19 +96,19 @@ class SummaryPage(QWidget):
         """Update the summary section with totals and percentage allocation."""
         # Calculate totals for all categories
         total_projected = sum(
-            self.budget_data.get_category_total(category)[0]
-            for category in self.budget_data.get_data()
+            self.budget_data.get_category_total(self.current_month, self.current_year, category)[0]
+            for category in self.budget_data.get_data(self.current_month, self.current_year)["categories"]
         )
         total_actual = sum(
-            self.budget_data.get_category_total(category)[1]
-            for category in self.budget_data.get_data()
+            self.budget_data.get_category_total(self.current_month, self.current_year, category)[1]
+            for category in self.budget_data.get_data(self.current_month, self.current_year)["categories"]
         )
         total_difference = total_projected - total_actual
 
         # Calculate percentage allocation for each super category
-        needs_projected, _ = self.budget_data.get_super_category_total("NEEDS")
-        fun_projected, _ = self.budget_data.get_super_category_total("FUN")
-        future_projected, _ = self.budget_data.get_super_category_total("FUTURE")
+        needs_projected, _ = self.budget_data.get_super_category_total(self.current_month, self.current_year, "NEEDS")
+        fun_projected, _ = self.budget_data.get_super_category_total(self.current_month, self.current_year, "FUN")
+        future_projected, _ = self.budget_data.get_super_category_total(self.current_month, self.current_year, "FUTURE")
 
         needs_percentage = (needs_projected / total_projected) * 100 if total_projected != 0 else 0
         fun_percentage = (fun_projected / total_projected) * 100 if total_projected != 0 else 0
@@ -100,3 +125,8 @@ class SummaryPage(QWidget):
             f"FUN: {fun_percentage:.1f}%\n"
             f"FUTURE: {future_percentage:.1f}%"
         )
+
+    def refresh_ui(self):
+        """Refresh the UI to reflect changes."""
+        self.update_summary_table()
+        self.update_summary_section()

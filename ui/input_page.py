@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QMessageBox, QInputDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QMessageBox, QInputDialog, QComboBox, QSpinBox
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
@@ -8,11 +8,26 @@ class InputPage(QWidget):
     def __init__(self, budget_data):
         super().__init__()
         self.budget_data = budget_data
+        self.current_month = "January"  # Default month
+        self.current_year = 2025  # Default year
         self.init_ui()
 
     def init_ui(self):
         """Initialize the UI for the Input Page."""
         self.layout = QVBoxLayout()
+
+        # Month selection dropdown
+        self.month_selector = QComboBox()
+        self.month_selector.addItems(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"])
+        self.month_selector.currentTextChanged.connect(self.change_month)
+        self.layout.addWidget(self.month_selector)
+
+        # Year selection spin box
+        self.year_selector = QSpinBox()
+        self.year_selector.setRange(2000, 2100)
+        self.year_selector.setValue(self.current_year)
+        self.year_selector.valueChanged.connect(self.change_year)
+        self.layout.addWidget(self.year_selector)
 
         # Scroll area to handle many categories
         scroll_area = QScrollArea()
@@ -22,8 +37,7 @@ class InputPage(QWidget):
 
         # Add default categories
         self.category_widgets = {}
-        for category in self.budget_data.get_data():
-            self.add_category_section(category)
+        self.load_categories()
 
         # Add a button to add new categories
         self.add_category_button = QPushButton("Add New Category")
@@ -42,6 +56,21 @@ class InputPage(QWidget):
         self.layout.addWidget(save_button)
         self.setLayout(self.layout)
 
+    def load_categories(self):
+        """Load categories from the budget data."""
+        for category in self.budget_data.get_data(self.current_month, self.current_year)["categories"]:
+            self.add_category_section(category)
+
+    def change_month(self, month):
+        """Change the current month and refresh the UI."""
+        self.current_month = month
+        self.refresh_ui()
+
+    def change_year(self, year):
+        """Change the current year and refresh the UI."""
+        self.current_year = year
+        self.refresh_ui()
+
     def add_category_section(self, category):
         """Add a section for a category with its expense items."""
         category_layout = QVBoxLayout()
@@ -53,7 +82,7 @@ class InputPage(QWidget):
         category_layout.addWidget(category_label)
 
         # Add expense items
-        for expense_item in self.budget_data.get_data()[category]["expenses"]:
+        for expense_item in self.budget_data.get_data(self.current_month, self.current_year)["categories"][category]["expenses"]:
             self.add_expense_row(category, expense_item, category_layout)
 
         # Add a button to add new expense items
@@ -63,7 +92,7 @@ class InputPage(QWidget):
         category_layout.addWidget(add_expense_button)
 
         # Add a separator line
-        separator = QLabel("——————————————————————————————")
+        separator = QLabel("——————————————————————————")
         separator.setStyleSheet("color: #555;")  # Gray color
         category_layout.addWidget(separator)
 
@@ -124,6 +153,13 @@ class InputPage(QWidget):
             "cost_difference_label": cost_difference_label,
         }
 
+        # Set initial values for projected and actual costs
+        projected_value = self.budget_data.get_data(self.current_month, self.current_year)["categories"][category]["expenses"][expense_item]["projected"]
+        actual_value = self.budget_data.get_data(self.current_month, self.current_year)["categories"][category]["expenses"][expense_item]["actual"]
+        projected_input.setText(str(projected_value))
+        actual_input.setText(str(actual_value))
+        self.update_cost_difference(category, expense_item)
+
     def update_cost_difference(self, category, expense_item):
         """Update the Cost Difference when Projected or Actual Cost changes."""
         widgets = self.category_widgets.get((category, expense_item))
@@ -141,19 +177,19 @@ class InputPage(QWidget):
                 self, "Select Super Category", "Choose Super Category:", ["NEEDS", "FUN", "FUTURE"], 0, False
             )
             if ok:
-                self.budget_data.add_category(new_category, super_category)
+                self.budget_data.add_category(self.current_month, self.current_year, new_category, super_category)
                 self.add_category_section(new_category)
 
     def add_new_expense(self, category):
         """Add a new expense item under a category."""
         new_expense, ok = QInputDialog.getText(self, "Add New Expense Item", "Enter expense item name:")
         if ok and new_expense:
-            self.budget_data.add_expense(category, new_expense)
+            self.budget_data.add_expense(self.current_month, self.current_year, category, new_expense)
             self.add_expense_row(category, new_expense, self.scroll_layout.itemAt(self.scroll_layout.count() - 1).layout())
 
     def remove_expense(self, category, expense_item):
         """Remove an expense item from a category."""
-        self.budget_data.remove_expense(category, expense_item)
+        self.budget_data.remove_expense(self.current_month, self.current_year, category, expense_item)
         self.refresh_ui()
 
     def refresh_ui(self):
@@ -167,16 +203,15 @@ class InputPage(QWidget):
 
         # Rebuild the UI with updated data
         self.category_widgets = {}
-        for category in self.budget_data.get_data():
-            self.add_category_section(category)
+        self.load_categories()
 
     def save_data(self):
         """Save the entered data to the budget data object."""
-        for category in self.budget_data.get_data():
-            for expense_item in self.budget_data.get_data()[category]["expenses"]:
+        for category in self.budget_data.get_data(self.current_month, self.current_year)["categories"]:
+            for expense_item in self.budget_data.get_data(self.current_month, self.current_year)["categories"][category]["expenses"]:
                 projected = float(self.get_input_value(category, expense_item, "projected"))
                 actual = float(self.get_input_value(category, expense_item, "actual"))
-                self.budget_data.update_expense(category, expense_item, projected, actual)
+                self.budget_data.update_expense(self.current_month, self.current_year, category, expense_item, projected, actual)
         QMessageBox.information(self, "Success", "Data saved successfully!")
         self.budget_data.data_changed.emit()  # Emit the signal after saving data
 
