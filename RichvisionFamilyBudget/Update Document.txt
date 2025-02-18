@@ -1,8 +1,0 @@
-App built with Deepseek
-
-App is loading well, but On input summary page is not updating
-and analysis page
-
-2. We are still building analysis page
-3. We still have User Settings page to build
-4. Logo , icon and Licensing to follow
